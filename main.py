@@ -2,6 +2,7 @@ import os
 import time
 import logging
 import copy
+import json
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -43,6 +44,16 @@ def get_state(driver):
         for element in elements
     ]
     return states_and_letters
+
+def get_row_results(driver, row_index):
+    state_list = get_state(driver)
+    state_list = state_list[row_index*5:(row_index*5) + 5]
+    state_list = [state for (state, letter) in state_list]
+    return state_list
+
+def check_state_for_win(driver, row_index):
+    state_list = get_row_results(driver, row_index)
+    return all([item == 'correct' for item in state_list])
     
 def delete_current_word(driver, tic=0.5):
     for i in range(5):
@@ -50,34 +61,32 @@ def delete_current_word(driver, tic=0.5):
         time.sleep(tic)
 
 class error_callback(object):
-  def __init__(self, row_index):
-    self.row_index = row_index
+    def __init__(self, row_index):  
+        self.row_index = row_index
 
-  def __call__(self, driver):
-    if self._check_row(driver):
-        time.sleep(0.1)
-        return self._check_toast(driver)
-    return False
+    def __call__(self, driver):
+        if self._check_row(driver):
+            time.sleep(0.1)
+            return self._check_toast(driver)
+        return False
   
-  def _check_row(self, driver):
-    row_loc = (By.CLASS_NAME, 'Row-module_row__pwpBq')
-    indicator_str = 'Row-module_invalid'  # not full string
-    row_elements = driver.find_elements(*row_loc)
-    row_element = row_elements[self.row_index]
-    x = row_element.get_attribute("class").split(" ")
-    print(x)
-    for cls in x:
-        if indicator_str in cls:  # not full string; check for contains substring
-            return True
-    return False
+    def _check_row(self, driver):
+        row_loc = (By.CLASS_NAME, 'Row-module_row__pwpBq')
+        indicator_str = 'Row-module_invalid'  # not full string
+        row_elements = driver.find_elements(*row_loc)
+        row_element = row_elements[self.row_index]
+        for cls in row_element.get_attribute("class").split(" "):
+            if indicator_str in cls:  # not full string; check for contains substring
+                return True
+        return False
   
-  def _check_toast(self, driver):
-    toast_cls = 'ToastContainer-module_toaster__TYGMD'
-    toast_id = 'ToastContainer-module_gameToaster__HPkaC'
-    toast_loc = (By.ID, toast_id)
-    toast_element = driver.find_element(*toast_loc)
-    toast_text = toast_element.text
-    return toast_text
+    def _check_toast(self, driver):
+        toast_cls = 'ToastContainer-module_toaster__TYGMD'
+        toast_id = 'ToastContainer-module_gameToaster__HPkaC'
+        toast_loc = (By.ID, toast_id)
+        toast_element = driver.find_element(*toast_loc)
+        toast_text = toast_element.text
+        return toast_text
       
 def wait_for_error(driver, row_index, wait_time=1.0):
     try:
@@ -89,6 +98,17 @@ def wait_for_error(driver, row_index, wait_time=1.0):
     except Exception as e:
         return f'Unknown Error: {e}'
     
+def check_page_for_win(driver, wait_time=3.0):
+    time.sleep(wait_time)
+    win_modal_class_name = 'Modal-module_modalOverlay__cdZDa'
+    try:
+        win_modal = driver.find_element(By.CLASS_NAME, win_modal_class_name)
+        if win_modal:
+            return True
+    except:
+        pass
+    return False
+
 class Colors:
     '''https://en.wikipedia.org/wiki/ANSI_escape_code#8-bit'''
     RESET =     '\033[0m'
@@ -102,15 +122,15 @@ def state_to_grid(state_list):
         grid.append(copy.copy(state_list[row*5:(row*5) + 5]))
     return grid
 
-def format_str(letter, state, formatted=False):
+def format_str(letter, state):
     d = {
         "correct":  Colors.GREEN,
         "present":  Colors.YELLOW,
         "absent":   Colors.GRAY,
         "empty":    Colors.RESET
     }
-    color = d[state]
-    if formatted and (state == "empty"):
+    color = d.get(state, Colors.RESET)
+    if state == "empty":
         letter = "\u25A1"
     return color + letter + Colors.RESET
 
@@ -119,7 +139,7 @@ def grid_to_str(grid_list, formatted=False):
         [
             " ".join( 
                 [ 
-                    format_str(letter, state, formatted) if formatted else letter
+                    format_str(letter, state) if formatted else letter
                     for (state, letter) in row
                 ]
             ) 
@@ -127,53 +147,59 @@ def grid_to_str(grid_list, formatted=False):
         ]
     )
         
+class WordleGame:
+
+    def __init__(self):
+        self.current_row = 0
+        self.driver = init_driver()
+        open_wordle_page(self.driver)
+
+    def play_round(self, word, retries=2):
+        for iter_try in range(retries):
+            play_word(self.driver, word)
+            err = wait_for_error(self.driver, self.current_row, wait_time=1.0)
+            if not(err):
+                break
+            delete_current_word(self.driver)
+        b_win = check_state_for_win(self.driver, self.current_row)
+        results_list = get_row_results(self.driver, self.current_row)
+        grid_str =  grid_to_str(state_to_grid(get_state(self.driver)), formatted=True)
+        info = {
+            "word": word,
+            "current_row": self.current_row,
+            "error": True if err else False,
+            "error_text": err if err else None,
+            "win": b_win,
+            "results": None if err else results_list,
+            "grid_formatted": grid_str,
+        }
+        if not(err):
+            self.current_row += 1
+        if b_win:
+            self.driver.quit()
+        return info
+
+    def get_state(self):
+        pass
+
+
 def main():
-    driver = init_driver()
 
-    open_wordle_page(driver)
+    game = WordleGame()
 
-    # Play Valid Word #1
-    current_row = 0
-    play_word(driver, "WORDS")
-    b_err = wait_for_error(driver, current_row)
-    print(f"b_err={b_err}")
-    current_state = get_state(driver)
-    # print(current_state)
-    current_grid = state_to_grid(current_state)
-    # print(current_grid)
-    grid_str = grid_to_str(current_grid, formatted=False)
-    print(grid_str)
-    grid_str = grid_to_str(current_grid, formatted=True)
-    print(grid_str)
+    word_list = [
+        "WORDS",
+        "FJORD",
+        "ZZ",
+        "YEROX",
+        "FLARE",
+    ]
 
-    # Play Valid Word #2
-    current_row += 1
-    play_word(driver, "FJORD")
-    b_err = wait_for_error(driver, 0)
-    print(f"b_err={b_err}")
-    grid_str =  grid_to_str(state_to_grid(get_state(driver)), formatted=True)
-    print(grid_str)
-    
-    # Play Invalid Word - Not Enough Letter
-    current_row +=1
-    play_word(driver, "ZZ")
-    b_err = wait_for_error(driver, current_row)
-    print(f"b_err={b_err}")
-    
-    delete_current_word(driver)
+    for word in word_list:
+        info = game.play_round(word)
+        print(info['grid_formatted'])
+        print(json.dumps(info, indent=4))
 
-    # Play Invalid Word - Not in Word List
-    play_word(driver, "YEROX")
-    b_err = wait_for_error(driver, current_row)
-    print(f"b_err={b_err}")
-    
-    delete_current_word(driver)
-
-    grid_str =  grid_to_str(state_to_grid(get_state(driver)), formatted=True)
-    print(grid_str)
-
-    time.sleep(20)
-    driver.quit()
 
 if __name__ == "__main__":
     main()
