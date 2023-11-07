@@ -9,6 +9,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import TimeoutException
+from flask import Flask, jsonify, request
 
 
 def init_driver():
@@ -153,6 +154,7 @@ class WordleGame:
         self.current_row = 0
         self.driver = init_driver()
         open_wordle_page(self.driver)
+        print('init')
 
     def play_round(self, word, retries=2):
         for iter_try in range(retries):
@@ -201,5 +203,58 @@ def main():
         print(json.dumps(info, indent=4))
 
 
+# Main Setup
+game = WordleGame()
+
+app = Flask(__name__)
+
+@app.route('/new_game', methods=['POST'])
+def new_game_route():
+    global game
+    try:
+        game = WordleGame()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        return jsonify({'status': 'failure', 'error': str(e)})
+
+@app.route('/play_word', methods=['POST'])
+def play_word_route():
+    data = request.get_json()
+    input_word = data.get('word', None)
+    if not(input_word):
+        return jsonify({'status': 'failure', 'error': 'No word provided'})
+    # TODO - check if word has 5 letters and they are alphanumeric
+    if game.current_row >= 6:
+        return jsonify({'status': 'failure', 'error': 'Game already finished'})
+    if game is None:
+        return jsonify({'status': 'failure', 'error': 'Game not initialized'})
+    info = game.play_round(input_word)
+    return jsonify({'status': 'success', 'info': info})
+
+
 if __name__ == "__main__":
-    main()
+    
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--test', action='store_true')
+    # TODO - add port/host args
+    args = parser.parse_args()
+    
+    app.run(debug=args.debug)
+    # main()
+
+    '''
+    curl -X POST -H "Content-Type: application/json" -d "{\"word\":\"fjoRD\"}" http://localhost:5000/play_word
+
+        '''
+
+    if args.test:
+        import requests
+        def client_play_word(word):
+            data = {'word': word}
+            r = requests.post('http://localhost:5000/play_word', json=data)
+            return r.json()
+        # TODO - write a couple of tests
+        
+
