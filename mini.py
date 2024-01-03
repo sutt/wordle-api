@@ -80,22 +80,60 @@ class WordleGame:
     def check_win(result_states):
         return all([state == 'correct' for state in result_states])
 
+class Guesser:
+    def __init__(self) -> None:
+        self.words = load_words()
+
+    def guess(
+        self,
+        common: bool = False,
+    ) -> str:
+        word_type = 'common' if common else 'valid'
+        word = random.choice(self.words[word_type])
+        return word
+
+def simulated_game(
+) -> list:
+    output = []
+    game = WordleGame(word="sails")
+    guesser = Guesser()
+    for _turn in range(6):
+        guess_word = guesser.guess(common=True)
+        info = game.play_round(guess_word)
+        output.append(info)
+        if info["win"]:
+            break
+    return output
+
+def filter_fields(
+    data: list,
+    fields=[
+        "word",
+        "current_row",
+        "error",
+        "error_text",
+        "win",
+        "results",
+        "grid",
+        "grid_formatted",
+        "grid_html"
+    ]
+) -> list:
+    return [
+        {k:v for k,v in e.items() if k in fields} 
+        for e in data
+    ]
 
 def main():
-    
-    game = WordleGame(word="sails")
-    print(game.word)
-
-    info = game.play_round('about')
-    state = game.grid_state
-    # print(grid_to_str(state, formatted=True))
-    
-    info = game.play_round('other')
-    state = game.grid_state
-    # print(grid_to_str(state, formatted=True))
-    # print(json.dumps(state, indent=2))
-    # print(json.dumps(info, indent=2))
-    print(info["grid_html"])
+    output = simulated_game()
+    fields=[
+        "word",
+        "current_row",
+        "results",
+        "win",
+    ]
+    output = filter_fields(output, fields=fields)
+    print(json.dumps(output, indent=2))
 
 if __name__ == '__main__':
     main()
