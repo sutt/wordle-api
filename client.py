@@ -40,17 +40,20 @@ def play_two_mini_games():
     
     info = mini_play_word('about', game_id)
     print(info.get('info', {}).get('grid_formatted', None))
-    print(info.get('info', {}).get('grid_html', None))
+    print(info.get('info', {}).get('grid', None))
+    # print(info.get('info', {}).get('grid_html', None))
     
     info = mini_play_word('sales', game_id)
     print(info.get('info', {}).get('grid_formatted', None))
-    print(info.get('info', {}).get('grid_html', None))
+    # print(info.get('info', {}).get('grid_html', None))
 
-    info = mini_play_word('skate', game_id_2)
-    print(info.get('info', {}).get('grid_formatted', None))
+    # info = mini_play_word('skate', game_id_2)
+    # print(info.get('info', {}).get('grid_formatted', None))
 
     info = mini_play_word('flame', game_id)
     print(info.get('info', {}).get('grid_formatted', None))
+    print(info.get('info', {}).get('grid', None))
+
 
 
 def play_one_nyt_game():
@@ -62,6 +65,7 @@ def play_one_nyt_game():
 
     info = nyt_play_word('meals', game_id)
     print(info.get('info', {}).get('grid_formatted', None))
+    
 
     time.sleep(2)
 
